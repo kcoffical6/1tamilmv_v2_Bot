@@ -5,6 +5,7 @@ import requests
 import threading
 import logging
 import re
+import datetime
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ class HotstarMonitor:
         # If scrape fails, we shouldn't start with empty list as it might cause spam later
         known_episodes = []
         status_msg = ""
+        todays_episodes = []
 
         if episodes is None:
              logger.warning(f"Initial scrape failed for {url}")
@@ -65,6 +67,9 @@ class HotstarMonitor:
              known_episodes = [e['id'] for e in episodes]
              status_msg = f"Found {len(episodes)} existing episodes."
 
+             # Check for any episodes from "Today"
+             todays_episodes = [e for e in episodes if e.get('is_today', False)]
+
         self.subscriptions[url] = {
             'subscribers': [chat_id],
             'known_episodes': known_episodes,
@@ -73,6 +78,16 @@ class HotstarMonitor:
             'initialized': (episodes is not None)
         }
         self.save_data()
+
+        # Special case: If found today's episode on first add, return it in the message
+        # But we return a simple string, so we can't notify via return value easily.
+        # The caller (angel.py) just replies with the text.
+        # We can append the link to the status message.
+        if todays_episodes:
+            status_msg += f"\n\n🔥 <b>Found Today's Update:</b>\n"
+            for ep in todays_episodes:
+                status_msg += f"• {ep['title']}\n🔗 {ep['link']}\n"
+
         return True, f"Started monitoring. {status_msg}"
 
     def extract_title(self, url):
@@ -129,6 +144,18 @@ class HotstarMonitor:
 
                      # Basic title extraction
                      title = link.get_text(strip=True)
+
+                     # Check for date in text (e.g. "Today", "20 May", etc)
+                     is_today = False
+                     # Look at parent text for date context if needed, but often it's inside the anchor or sibling
+                     # Simple heuristic: Check if title or nearby text says "Today"
+                     # Since we only iterate 'a', we check the anchor text.
+                     if "today" in title.lower():
+                         is_today = True
+
+                     # Note: Finding date in list view is hard without specific selectors.
+                     # We assume if the user sees "Today" in the title/desc, we capture it.
+
                      if not title:
                          # Try to get title from URL slug
                          # .../arjuns-support-for-bhargavi/1641016181/watch
@@ -147,7 +174,8 @@ class HotstarMonitor:
                      episodes.append({
                          'id': ep_id,
                          'link': full_link,
-                         'title': title
+                         'title': title,
+                         'is_today': is_today
                      })
 
             # Deduplicate by ID
