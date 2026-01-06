@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 # ============ WOODctaft =================
-TOKEN = os.getenv('TOKEN')
+TOKEN = os.getenv('TOKEN', '5497255628:AAEwBfKmLKJIb5O_MKy8fEVgxyOk19-WkJs')
 TAMILMV_URL = os.getenv('TAMILMV_URL', 'https://www.1tamilmv.fi')
 # ========================================
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
