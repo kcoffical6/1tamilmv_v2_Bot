@@ -5,7 +5,6 @@ import telebot
 from telebot import types
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, request
 import logging
 import threading
 try:
@@ -23,14 +22,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 # ============ WOODctaft =================
 TOKEN = os.getenv('TOKEN')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 TAMILMV_URL = os.getenv('TAMILMV_URL', 'https://www.1tamilmv.fi')
-PORT = int(os.getenv('PORT', 3000))
 # ========================================
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
-
-# Flask app
-app = Flask(__name__)
 
 # Initialize Hotstar Monitor
 hotstar_monitor = HotstarMonitor()
@@ -213,22 +207,6 @@ def get_movie_details(url):
         return []
 
 
-@app.route('/')
-def health_check():
-    return "Angel Bot Healthy", 200
-
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    else:
-        return 'Invalid content type', 403
-
-
 if __name__ == "__main__":
     # Start monitor thread
     monitor_thread = threading.Thread(target=run_monitor_loop, daemon=True)
@@ -238,8 +216,6 @@ if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
 
-    # Set webhook
-    bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
-
-    # Start Flask app
-    app.run(host='0.0.0.0', port=PORT)
+    # Start polling
+    logger.info("Starting bot polling...")
+    bot.infinity_polling()
