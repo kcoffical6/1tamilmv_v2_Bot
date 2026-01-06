@@ -7,6 +7,11 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, request
 import logging
+import threading
+try:
+    from tamilmvbot.hotstar_handler import HotstarMonitor
+except ImportError:
+    from hotstar_handler import HotstarMonitor
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +31,9 @@ bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
 # Flask app
 app = Flask(__name__)
+
+# Initialize Hotstar Monitor
+hotstar_monitor = HotstarMonitor()
 
 # Global variables
 movie_list = []
@@ -61,6 +69,30 @@ def random_answer(message):
         caption=text_message,
         reply_markup=keyboard
     )
+
+@bot.message_handler(commands=['monitor'])
+def monitor_handler(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "⚠️ Usage: /monitor <hotstar_url>\nExample: /monitor https://www.hotstar.com/in/shows/show-name/12345")
+            return
+
+        url = args[1]
+        success, response = hotstar_monitor.add_show(message.chat.id, url)
+        bot.reply_to(message, response)
+    except Exception as e:
+        logger.error(f"Monitor command error: {e}")
+        bot.reply_to(message, "❌ An error occurred processing your request.")
+
+def run_monitor_loop():
+    logger.info("Starting Hotstar monitor loop")
+    while True:
+        try:
+            hotstar_monitor.check_updates(bot)
+        except Exception as e:
+            logger.error(f"Error in monitor loop: {e}")
+        time.sleep(600) # Check every 10 minutes
 
 # /view command
 
@@ -198,6 +230,10 @@ def webhook():
 
 
 if __name__ == "__main__":
+    # Start monitor thread
+    monitor_thread = threading.Thread(target=run_monitor_loop, daemon=True)
+    monitor_thread.start()
+
     # Remove any previous webhook
     bot.remove_webhook()
     time.sleep(1)
